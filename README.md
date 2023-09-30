@@ -1,4 +1,4 @@
-# Django React Danbooru-like Website
+# Fakebooru
 ## About 
 This is a [Danbooru](https://danbooru.donmai.us/)-like website built with [React](https://react.dev/) and [Django](https://www.djangoproject.com/). The website features a tag-based public image database with convenient CRUD api support. The Docker deployment uses Nginx as a reverse proxy to serve the react app hosted on port 3000. 
 ## Installation
