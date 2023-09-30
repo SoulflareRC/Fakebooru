@@ -1,0 +1,45 @@
+*.pyc
+*.sqlite3
+*.env
+**/staticfiles
+**/mediafiles
+**/__pycache__/
+/.vscode/
+**/node_modules
+# pycharm
+**/.idea/
+
+# data
+*.dump
+
+# npm
+node_modules/
+npm-debug.log
+
+# Webpack
+/frontend/bundles/*
+/frontend/webpack_bundles/*
+/webpack-stats.json
+
+# Sass
+.sass-cache
+*.map
+
+# General
+**/venv/
+/env/
+/output/
+/cache/
+boilerplate.zip
+.eslintignore
+.eslintrc.js
+**/migrations/
+
+
+.direnv
+.envrc
+.env_secret*
+.tool-versions
+
+# deepdanbooru
+**/deepdanbooru

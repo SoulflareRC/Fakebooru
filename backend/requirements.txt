@@ -1,0 +1,17 @@
+Django
+deepdanbooru-onnx
+Pillow
+python-dotenv
+django-allauth==0.54.0
+django-allauth-ui
+django-filter
+django-fluent-comments
+django-threadedcomments
+django-taggit
+django-cors-headers
+django-simpleui
+gunicorn
+whitenoise
+djangorestframework
+django-model-utils
+dj-rest-auth==4.0.0
