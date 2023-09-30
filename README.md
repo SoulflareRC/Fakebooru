@@ -41,6 +41,11 @@ Navigate to http://127.0.0.1:8000/ after the django backend is launched.
 #### .env
 Copy `.env.example` in `/backend` and `/frontend` and rename it to `.env`. Edit the `.env` file to enable email verification.  
 ## Pages
+### Authentication 
+![login](/Demo/login.png)
+- Token-based authentication
+- Email verification
+- Password reset email
 ### Index 
 ![index](/Demo/posts.png)
 - On-hover post stats summary
@@ -79,4 +84,6 @@ Copy `.env.example` in `/backend` and `/frontend` and rename it to `.env`. Edit 
 - Tabbed user info
 - Displays user stats & posts
 - Responsive profile editing
+
+
 
