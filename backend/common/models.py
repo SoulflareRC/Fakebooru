@@ -46,6 +46,9 @@ class MyTag(TagBase):
         verbose_name = _("Tag")
         verbose_name_plural = _("Tags")
         ordering = ('-date','name')
+        indexes = [
+            models.Index(fields=['name']),
+        ]
 class TaggedItem(GenericTaggedItemBase):
     tag = models.ForeignKey(
         MyTag,
@@ -135,6 +138,10 @@ class Rating(models.Model):
     score = models.IntegerField(choices=RATES)
     by = models.ForeignKey(User,on_delete=models.CASCADE)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['post', 'by']),
+        ]
 class CommentVote(models.Model):
     VOTES = [(x,str(x)) for x in (-1,0,1)]
     comment = models.ForeignKey(FluentComment,related_name="votes",on_delete=models.CASCADE)

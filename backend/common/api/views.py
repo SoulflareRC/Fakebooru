@@ -1,4 +1,7 @@
+import rest_framework.permissions
+from django.core.cache import cache
 from common import models
+from django.db.models import Prefetch
 from fluent_comments.models import FluentComment
 from django.db.models import Sum,Avg,Count
 import django.core.files.uploadedfile
@@ -17,11 +20,21 @@ from . import backends,pagination,permissions,serializers
 import json
 '''Userinfo'''
 class UserInfoProfileViewset(viewsets.ModelViewSet):
-    queryset = models.UserInfo.objects.all()
+    queryset = models.UserInfo.objects.all().\
+        select_related("user").\
+        prefetch_related(
+        "user__posts_uploaded",
+        "user__saved_posts",
+        "user__posts_uploaded__ratings",
+        "user__posts_uploaded__saved_by",
+        "user__posts_uploaded__tags",
+    )
     serializer_class =serializers.UserInfoProfileSerializer
     permission_classes = (permissions.UserInfoPermission,)
 class UserInfoViewset(viewsets.ModelViewSet):
-    queryset = models.UserInfo.objects.all()
+    queryset = models.UserInfo.objects.all()\
+        .select_related("user")\
+        .prefetch_related("user__emailaddress_set")
     serializer_class =serializers.UserInfoSerializer
     permission_classes = (permissions.UserInfoPermission,)
     query_fields=('user',)
@@ -53,10 +66,17 @@ class UserInfoViewset(viewsets.ModelViewSet):
 
 class PostViewSet( viewsets.ModelViewSet):
 
-    queryset = models.Post.objects.all().order_by('-publish_date')\
-        .annotate(score_avg=Avg('ratings__score')).annotate(saved_by_cnt=Count('saved_by')) # annotate is the way to make this into the ordering fields...
+    queryset = models.Post.objects.all()\
+        .prefetch_related(
+            "tags",
+            "tags__tagged_items",
+            "saved_by",
+            "saved_by__userinfo",
+    )\
+        .order_by('-publish_date')\
+        .annotate(score_avg=Avg('ratings__score'))\
+        .annotate(saved_by_cnt=Count('saved_by')) # annotate is the way to make this into the ordering fields...
 
-    # serializer_class =  PostSerializer
     filter_backends = (filters.SearchFilter, filters.OrderingFilter,
                        backends.PublishDateFilterBackend, backends.TagFilterBackend)
     search_fields = ['tags']
@@ -64,20 +84,24 @@ class PostViewSet( viewsets.ModelViewSet):
     pagination_class = pagination.StandardPagination
     permission_classes = (permissions.PostPermission,)
     def get_serializer_class(self):
+        # print(self.action)
+        if self.action == "retrieve":
+            return serializers.PostSerializer
         if self.action == 'list':
             return serializers.SimplePostSerializer
         if self.action in ('create','update','partial_update'):
             return serializers.PostModifySerializer
+        # print("Huh?")
         return serializers.PostSerializer
     def get_paginated_response(self, data):
         response = super(PostViewSet, self).get_paginated_response(data)
+        # print(response.data.get("results"))
         posts = self.paginate_queryset(self.filter_queryset(self.get_queryset()))
-        # print("posts:",posts)
         tags = set()
         for post in posts:
-            tags.update(post.tags.all())
-        serializer =serializers.MyTagSerializer(tags, many=True,context={'request':self.request})
-        response.data['unique_tags'] = serializer.data
+            tags.update(post.tags.all().prefetch_related("tagged_items","related","related__tagged_items"))
+        serializer = serializers.MyTagSerializer(tags, many=True,context={'request':self.request})
+        response.data['unique_tags'] = serializer.data # can't really optimize this, cache this with queryset
         return response
     def update(self, request, *args, **kwargs):
         # print("Update")
@@ -123,7 +147,8 @@ class RatingViewSet(viewsets.ModelViewSet):
 '''Tags'''
 
 class MyTagViewSet(viewsets.ModelViewSet):
-    queryset = models.MyTag.objects.all().annotate(post_cnt=Count('tagged_items'))
+    queryset = models.MyTag.objects\
+        .all() #  Prefetch: Insanely fast!!!
     search_fields = ['name'] # this is vague partial match
     ordering_fields = ['date','post_cnt','name']
     query_fields = ['category','name']  # this only allows exact match
@@ -135,7 +160,16 @@ class MyTagViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return serializers.SimpleMyTagSerializer
         return serializers.MyTagSerializer
-
+    def get_queryset(self):
+        queryset = super().get_queryset().annotate(post_cnt=Count("tagged_items"))
+        if self.action == "list":
+            print("List! queryset")
+            # queryset = queryset.annotate(tagged_items_cnt=Count("tagged_items"))
+            # just annotating is actually better than prefetching all items
+        else:
+            print(f"{self.action} queryset")
+            queryset = queryset.prefetch_related("tagged_items")
+        return queryset
     @action(detail=False, methods=['post'])
     def suggest(self, request, *args, **kwargs):
         tags = []
@@ -162,14 +196,26 @@ class CommentViewSet(viewsets.ModelViewSet):
     filter_backends = (
                        # backends.QueryParamFilterBackend,
                        filters.OrderingFilter,)
-    serializer_class =serializers. PostCommentSerializer
+    serializer_class =serializers.PostCommentSerializer
     ordering_fields = ('submit_date',)
     queryset = FluentComment.objects.all().order_by('submit_date')
     permission_classes = (permissions.CommentPermission,)
     pagination_class = pagination.StandardPagination
     def get_queryset(self):
         if self.action=="list":
-            return FluentComment.objects.filter(parent=None)
+            cache_key = f"comment_list"
+            queryset = cache.get(cache_key)
+            if queryset is None:
+                queryset =  FluentComment.objects.filter(parent=None)\
+                            .prefetch_related(
+                                "children","children__parent", "votes","votes__by",
+                                "content_object","content_object__saved_by",
+                                "content_object__tags","content_object__tags__tagged_items",
+                                "content_object__saved_by__userinfo",
+                                "content_object__comments",
+                            ).select_related("user","user__userinfo",)
+                cache.set(cache_key,queryset,300)
+            return queryset
         return FluentComment.objects.all()
     def get_serializer_class(self):
         if self.action == "list":

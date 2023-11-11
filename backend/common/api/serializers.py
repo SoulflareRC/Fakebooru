@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.shortcuts import reverse
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
@@ -9,6 +10,23 @@ from django.contrib.contenttypes.models import ContentType
 from taggit.serializers import TaggitSerializer,TagListSerializerField
 from allauth.account.models import EmailAddress
 User = get_user_model()
+class CachedSerializer(serializers.ModelSerializer):
+    '''This mixin caches a serializer's response to the object'''
+
+    cache_timeout = 5*60
+    cache_prefix = None
+    def to_representation(self, instance):
+        cache_attrs = [instance._meta.model_name,str(instance.pk),"serialized"]
+        if self.cache_prefix:
+            cache_attrs.insert(0,self.cache_prefix)
+        cache_key = "_".join(cache_attrs)
+        cached_data = cache.get(cache_key)
+        if cached_data is None:
+            serialized_data = super().to_representation(instance)
+            cache.set(cache_key, serialized_data, self.cache_timeout)
+            return serialized_data
+        return cached_data
+
 class NoUpdateMixin(serializers.ModelSerializer):
     '''This mixin serves as a solution to make certain fields create & read only,
        but not update. To use, specify no_update_fields in the Meta class. '''
@@ -59,9 +77,8 @@ class UserInfoSerializer(NoUpdateMixin,serializers.ModelSerializer):
         no_update_fields = ('user')
     def get_verified(self,uinfo:models.UserInfo):
         user = uinfo.user
-        ea = EmailAddress.objects.filter(user=user).first()
-        # print(uinfo.user.pk)
-        # print(ea)
+        ea = user.emailaddress_set.first()
+        # ea = EmailAddress.objects.filter(user=user).first()
         return ea.verified
 class SimpleUserInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -75,7 +92,9 @@ class SimpleMyTagSerializer(serializers.ModelSerializer):
         fields = ('id','post_cnt','category','name',)
     def get_post_cnt(self,tag):
         return tag.tagged_items.count()
-class MyTagSerializer(SimpleMyTagSerializer):
+        # return len(tag.tagged_items_list)
+        # return tag.post_cnt
+class MyTagSerializer(CachedSerializer,SimpleMyTagSerializer):
     # tags = TagListSerializerField()
     tagged_posts = serializers.SerializerMethodField()
     related = SimpleMyTagSerializer(many=True)
@@ -83,8 +102,18 @@ class MyTagSerializer(SimpleMyTagSerializer):
         model = models.MyTag
         fields = ('id', 'post_cnt', 'category', 'name','description','related','tagged_posts',)
     def get_tagged_posts(self,tag):
+        # content object?
+        tagged_items = tag.tagged_items.all().values_list('object_id', flat=True)
+        # print("Tagged_items:")
+        # tagged_items = [item["object_id"] for item in tag.tagged_items]
+        tagged_posts = models.Post.objects.filter(id__in=tagged_items) \
+            .prefetch_related(
+            "tags",
+            "saved_by",
+            "saved_by__userinfo",
+        )[:15]
+        tagged_posts = tagged_posts\
 
-        tagged_posts = models.Post.objects.filter(tags=tag)[:15]
         return SimplePostSerializer(tagged_posts,many=True,context=self.context).data
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -97,22 +126,20 @@ class SimplePostSerializer(serializers.ModelSerializer):
     image_width = serializers.SerializerMethodField()
     image_size = serializers.SerializerMethodField()
     class Meta:
+        cache_timeout = 300
         model=models.Post
         fields = ('thumb','preview','image',
                   'id',
                   'image_size','image_height','image_width',
                   'saved_by','saved_by_cnt',)
-
-
     def get_saved_by(self,post):
-        # request = self.context.get('request')
-        # print("Context request:", request)
         context = self.context
-        # if request is not None:
-        #     context = {"request", request}
         users = post.saved_by.all()
-        userinfo_objs = models.UserInfo.objects.filter(user__in=users).distinct()
-        return SimpleUserInfoSerializer(userinfo_objs,many=True,context=context).data
+        # userinfo_objs = models.UserInfo.objects.filter(user__in=users).distinct()
+        userinfos = set()
+        for user in users:
+            userinfos.add(user.userinfo)
+        return SimpleUserInfoSerializer(userinfos,many=True,context=context).data
     def get_saved_by_cnt(self,post):
         return post.saved_by.count()
     def get_image_width(self, obj):
@@ -133,7 +160,7 @@ class SimpleCommentSerializer(serializers.ModelSerializer):
         model = FluentComment
         fields = ('id','user_userinfo','comment')
         read_only_fields = ('id','user_userinfo','comment')
-class PostCommentSerializer(serializers.ModelSerializer):
+class PostCommentSerializer(CachedSerializer, serializers.ModelSerializer):
 
     # content_type = serializers.PrimaryKeyRelatedField(queryset=ContentType.objects.filter(app_label="common"),default=3)
     # site = serializers.PrimaryKeyRelatedField(queryset=Site.objects.all(),default=1)
@@ -143,27 +170,33 @@ class PostCommentSerializer(serializers.ModelSerializer):
     total_vote = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
     parent_top = serializers.SerializerMethodField()
+
+    cache_prefix = "PostComment"
+    cache_timeout = 300
     class Meta:
+
         model = FluentComment
         fields =('id','content_type','object_pk','user','comment','site','parent','parent_top','children','submit_date',
                  'user_userinfo','voted_by','total_vote',)
         read_only_fields = ('site','content_type','parent_top','children','submit_date',
                             'user_userinfo','voted_by','total_vote',)
+
     def get_voted_by(self,comment):
         return [vote.by.pk for vote in comment.votes.all()]
+        # return comment.votes.all().values_list('id', flat=True)
     def get_total_vote(self,comment):
         total = comment.votes.all().aggregate(Sum('vote'))['vote__sum'] or 0
         return total
     def get_children(self,comment):
-        return PostCommentSerializer(comment.children.all(),many=True,context=self.context).data
+        return PostCommentSerializer(comment.children.all().prefetch_related(
+                            "children","children__parent", "votes","votes__by"
+                        ).select_related("user","user__userinfo"),many=True,context=self.context).data
     def get_parent_top(self,comment):
-        # get the top level parent
         cur = comment
         while cur.parent:
             cur = cur.parent
-            # print(cur)
-        return SimpleCommentSerializer(cur,context=self.context).data
-
+        data =  SimpleCommentSerializer(cur,context=self.context).data
+        return data
     def create(self, validated_data):
         validated_data['site'] = Site.objects.get(pk=1)
         validated_data['content_type'] = ContentType.objects.get_for_model(models.Post)
@@ -172,6 +205,9 @@ class PostCommentSerializer(serializers.ModelSerializer):
 class ListPostCommentSerializer(PostCommentSerializer):
     # for the comments page.
     post = serializers.SerializerMethodField()
+
+    cache_prefix = "ListPostComment"
+    cache_timeout = 300
     class Meta:
         model = FluentComment
         fields = ('id', 'content_type', 'object_pk', 'user', 'comment', 'site', 'parent', 'children', 'submit_date',
@@ -179,11 +215,15 @@ class ListPostCommentSerializer(PostCommentSerializer):
         read_only_fields = ('site', 'content_type', 'children', 'submit_date',
                             'user_userinfo', 'voted_by', 'total_vote','post',)
     def get_post(self,comment):
-        post = models.Post.objects.get(pk=comment.object_pk)
+        # post = models.Post.objects.get(pk=comment.object_pk)
+        post = comment.content_object
         return PostSerializer(post,context=self.context).data
     def get_children(self,comment):
         # don't get all children, only get first 3
-        return PostCommentSerializer(comment.children.all()[:3],context=self.context,many=True).data
+        queryset = comment.children.all().prefetch_related(
+                            "children","children__parent", "votes","votes__by"
+                        ).select_related("user","user__userinfo")[:3]
+        return PostCommentSerializer(queryset,context=self.context,many=True).data
 class PostSerializer(NoUpdateMixin,SimplePostSerializer):
     tags = SimpleMyTagSerializer(many=True,read_only=False)
     publish_date = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%S", required=False, read_only=True)
@@ -228,6 +268,7 @@ class UserInfoProfileSerializer(serializers.ModelSerializer):
     posts_fav = serializers.SerializerMethodField()
     posts_upload = serializers.SerializerMethodField()
     # stats_posts = serializers.SerializerMethodField()
+
     stats_likes = serializers.SerializerMethodField()
     stats_posts_score_avg = serializers.SerializerMethodField()
     stats_tags_fav = serializers.SerializerMethodField()
@@ -237,7 +278,10 @@ class UserInfoProfileSerializer(serializers.ModelSerializer):
         fields = ('display_name','icon','slogan','id','profile_bg',
                   'posts_fav','posts_upload',
                   # 'stats_posts', # just calculate, no need to do this separately
-                  'stats_likes','stats_posts_score_avg','stats_tags_fav','stats_tags_upload',
+                  'stats_likes',
+                  'stats_posts_score_avg',
+                  'stats_tags_fav',
+                  'stats_tags_upload',
                   )
     def get_stats_likes(self,userinfo):
         user = userinfo.user
@@ -248,7 +292,7 @@ class UserInfoProfileSerializer(serializers.ModelSerializer):
         return likes
     def get_stats_posts_score_avg(self,userinfo):
         user = userinfo.user
-        posts = user.posts_uploaded.all()
+        posts = user.posts_uploaded.all() #.prefetch_related("ratings")
         total_score = 0
         total_cnt = 0
         for post in posts:
@@ -260,23 +304,43 @@ class UserInfoProfileSerializer(serializers.ModelSerializer):
             return 0
         return total_score/total_cnt
     def extract_tags(self,posts_set):
-        tagged_items_set = models.TaggedItem.objects.filter(id__in=posts_set)
-        tags = models.MyTag.objects.filter(tagged_items__in=tagged_items_set).distinct()
-        tags = tags.annotate(fav_cnt=Count('tagged_items',filter=Q(tagged_items__in=tagged_items_set)))
+        '''input:
+            posts_set: a queryset of post objects
+           return: a set of tags from the tags posts in posts_set have, with each category having at most 5 tags'''
+
+        # tagged_items_set = models.TaggedItem.objects.filter(id__in=posts_set)
+        # tags = models.MyTag.objects.filter(tagged_items__in=tagged_items_set).distinct()
+        # tags = tags.annotate(fav_cnt=Count('tagged_items',filter=Q(tagged_items__in=tagged_items_set)))
+        tags = models.MyTag.objects.none()
+        for post in posts_set:
+            tags |= post.tags.all().prefetch_related("tagged_items")
+        tags = tags.annotate(fav_cnt=Count('tagged_items'))
         tags = tags.order_by("-fav_cnt")
-        tags_set = set()
+        # tags_set = set()
         CATEGORIES = ["general","artist","copyright","character","uncategorized",]
-        for cat in CATEGORIES:
-            tags_cat = tags.filter(category=cat)
-            tags_set.update(tags_cat[:5])
-        return SimpleMyTagSerializer(tags_set,many=True,context=self.context).data
+        # for cat in CATEGORIES:
+        #     tags_cat = tags.filter(category=cat)
+        #     tags_set.update(tags_cat[:5])
+        # return SimpleMyTagSerializer(tags_set,many=True,context=self.context).data
+        # Get up to 5 tags for each category without additional queries
+        final_tags_set = set()
+
+        # Dictionary to keep track of the count of tags in each category
+        category_count = {cat: 0 for cat in CATEGORIES}
+
+        for tag in tags: # avoid using query operations, massively reduced database roundtrips!!!
+            if category_count[tag.category] < 5:
+                final_tags_set.add(tag)
+                category_count[tag.category] += 1
+
+        return SimpleMyTagSerializer(final_tags_set, many=True, context=self.context).data
     def get_stats_tags_fav(self,userinfo):
         user = userinfo.user
-        posts_fav = user.saved_posts.all()
+        posts_fav = user.saved_posts.all() # .values_list('id', flat=True) # reduce amount of data retrieved
         return self.extract_tags(posts_fav)
     def get_stats_tags_upload(self,userinfo):
         user = userinfo.user
-        posts_upload = user.posts_uploaded.all()
+        posts_upload = user.posts_uploaded.all() # .values_list('id', flat=True)
         return self.extract_tags(posts_upload)
     def get_posts_fav(self,userinfo):
         # get all the posts whose saved_by has user of this object

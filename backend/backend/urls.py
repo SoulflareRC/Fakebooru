@@ -16,6 +16,7 @@ for route in routes:
     router.register(route["regex"], route["viewset"], basename=route["basename"])
 import allauth.account.urls
 urlpatterns = [
+    path("__debug__/", include("debug_toolbar.urls")),
     path("", include("common.urls"), name="common"),
     path("api/", include(router.urls), name="api"),
     # path("accounts/", include('allauth.urls')),

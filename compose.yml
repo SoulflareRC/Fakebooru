@@ -17,6 +17,12 @@ services:
           - frontend
         networks:
           - web_network
+    redis:
+        image: redis:latest
+        ports:
+            - "6379:6379"  # Expose the default Redis port
+        networks:
+            - web_network
     nginx: 
         restart: always 
         image: nginx:latest 
