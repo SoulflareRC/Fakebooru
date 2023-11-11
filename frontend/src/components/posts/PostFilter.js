@@ -5,6 +5,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 export const PostFilter = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  console.log("Filter search params:",params);
+  const ordering = params.get("ordering"), 
+        last_day = params.get("last_day"), 
+        last_week = params.get("last_week"), 
+        last_month = params.get("last_month"); 
+  const last_key = last_day?"day":(last_week?"week":(last_month?"month":"none")), 
+        last_val = last_day?last_day:(last_week?last_week:(last_month?last_month:1)); 
+  console.log("Last key:",last_key," Last val:",last_val); 
   const handleSubmit = (e) => {
     e.preventDefault(); // don't submit yet
     const form = e.target;
@@ -34,7 +43,7 @@ export const PostFilter = () => {
           <Form className="d-flex flex-column gap-2" onSubmit={handleSubmit}>
             <InputGroup>
               <InputGroup.Text>ordering</InputGroup.Text>
-              <Form.Select name="ordering">
+              <Form.Select name="ordering"  defaultValue={ordering?ordering:"-publish_date"}>
                 <option value="-publish_date">Date</option>
                 <option value="-score_avg">Quality</option>
                 <option value="-saved_by_cnt">Popularity</option>
@@ -42,8 +51,8 @@ export const PostFilter = () => {
             </InputGroup>
             <InputGroup>
               <InputGroup.Text>Last</InputGroup.Text>
-              <FormControl defaultValue={1} min="1" name="time_n" type="number" />
-              <Form.Select name="time">
+              <FormControl defaultValue={last_val} min="1" name="time_n" type="number" />
+              <Form.Select defaultValue={last_key} name="time">
                 <option value="none">(none)</option>
                 <option value="day">days</option>
                 <option value="week">weeks</option>

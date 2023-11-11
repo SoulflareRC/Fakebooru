@@ -18,17 +18,18 @@ export const Posts = () => {
   const navigate = useNavigate();
   const { order, posts, fetchPosts, fetchPostCnt, active, page_size, postTags } =
     Context.usePostContext();
-  const { tags, setTags, sortTags, tagifyTags } = Context.useTagContext();
+  const { tags, setTags, sortTags, tagifyTags, setTagifyTags  } = Context.useTagContext();
   const queryPosts = async (tags) => {
     const queryParams = new URLSearchParams(location.search);
     queryParams.set('page', 1);
-    if (tags.length) {
-      tags.forEach((tag) => {
+    if (tagifyTags.length) {
+      console.log("Querying posts with tags:",tagifyTags); 
+      queryParams.delete("tags"); 
+      tagifyTags.forEach((tag) => {
         queryParams.append('tags', tag);
       });
-    } else {
-      queryParams.delete('tags');
-    }
+    } 
+    console.log("Navigating to ",location.pathname,queryParams.toString());
     navigate({
       pathname: location.pathname,
       search: queryParams.toString(),

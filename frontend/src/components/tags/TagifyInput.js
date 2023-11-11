@@ -1,7 +1,7 @@
 import Tagify from '@yaireo/tagify';
 // import Tags from '@yaireo/tagify/dist/react.tagify';
 import React, { useRef, useEffect } from 'react';
-
+import { useLocation, useNavigate } from 'react-router-dom';
 // import api from '../../api';
 import { useTagContext } from '../../context';
 
@@ -17,7 +17,12 @@ export const TagifyInput = ({ placeholder, handleSubmit = (tags) => {} }) => {
     tagify.current.whitelist = tags;
     tagify.current.dropdown.show();
   };
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = new URLSearchParams(location.search); 
+  const queryTags = params.getAll("tags");
   useEffect(() => {
+    setTagifyTags(queryTags);
     const baseTagifySettings = {
       maxTags: 20,
       whitelist: [],
@@ -49,10 +54,8 @@ export const TagifyInput = ({ placeholder, handleSubmit = (tags) => {} }) => {
       }
     };
     const handleChange = (e) => {
-      // console.log(tagify.current);
-      // console.log("Tagify input changed!"+tagify.current.value);
       const tags = tagify.current.value.map((tag) => tag.value);
-      console.log(tags);
+      // console.log(tags);
       setTagifyTags(tags);
     };
     tagify.current.on('keydown', handleEnter);
@@ -65,7 +68,7 @@ export const TagifyInput = ({ placeholder, handleSubmit = (tags) => {} }) => {
       // to prevent attaching multiple listeners.
       tagify.current.destroy();
     };
-  }); // add event listeners
+  },[]); // add event listeners
   useEffect(() => {
     tagify.current.removeAllTags();
     tagify.current.addTags(tagifyTags);

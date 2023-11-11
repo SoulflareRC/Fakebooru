@@ -33,7 +33,7 @@ export const PostActionBar = ({ post, showText = false }) => {
           {showText && <span>{saved ? 'Saved' : 'Save'}</span>}
         </a>
       )}
-      <a className="icon-link icon-link-hover" download href={post.preview} title="download">
+      <a className="icon-link icon-link-hover" download="image.jpg" href={post.preview} title="download">
         <Download />
         {showText && <span>Download</span>}
       </a>
