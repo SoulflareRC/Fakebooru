@@ -83,6 +83,7 @@ Copy `.env.example` in `/backend` and `/frontend` and rename it to `.env`. Edit 
 - Tabbed user info
 - Displays user stats & posts
 - Responsive profile editing
-
+### Caching 
+The Django backend uses Redis for caching. Most caching are done with object-serialized data. 
 
 
