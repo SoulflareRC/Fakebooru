@@ -2,7 +2,6 @@
 ## About 
 This is a [Danbooru](https://danbooru.donmai.us/)-like website built with [React](https://react.dev/) as the frontend and [Django](https://www.djangoproject.com/) as the backend. The website features a tag-based public image database with convenient CRUD API support with strict permissions. The Docker deployment uses Nginx as a reverse proxy to serve the react app hosted on port 3000. 
 ## Installation
-Follow the instructions in the [Running](https://github.com/vintasoftware/django-react-boilerplate#running) section of Django React Boilerplate. To use tag suggestion, create a `deepdanbooru` folder in the `backend` folder, download the [model](https://huggingface.co/chinoll/deepdanbooru/resolve/main/deepdanbooru.onnx) and [tags](https://huggingface.co/chinoll/deepdanbooru/resolve/main/tags.txt) files and put them in the `deepdanbooru` folder. 
 #### Deploy with Docker Compose
 Make sure you have docker compose installed, run the following command to launch the app.  
 ```
