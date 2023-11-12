@@ -33,7 +33,7 @@ export const PostActionBar = ({ post, showText = false }) => {
           {showText && <span>{saved ? 'Saved' : 'Save'}</span>}
         </a>
       )}
-      <a className="icon-link icon-link-hover" download="image.jpg" href={post.preview} title="download">
+      <a className="icon-link icon-link-hover" download href={"https://files.yande.re/sample/9a49614983dc8661dac0cf14cdfc7e2f/yande.re%201132351%20sample%20ass%20atdan%20dress%20feet%20furina%20garter%20genshin_impact.jpg"} title="download">
         <Download />
         {showText && <span>Download</span>}
       </a>

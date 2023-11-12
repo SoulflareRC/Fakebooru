@@ -78,8 +78,7 @@ class UserInfoSerializer(NoUpdateMixin,serializers.ModelSerializer):
     def get_verified(self,uinfo:models.UserInfo):
         user = uinfo.user
         ea = user.emailaddress_set.first()
-        # ea = EmailAddress.objects.filter(user=user).first()
-        return ea.verified
+        return ea.verified or user.is_superuser
 class SimpleUserInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.UserInfo

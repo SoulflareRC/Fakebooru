@@ -17,3 +17,4 @@ django-model-utils
 dj-rest-auth==4.0.0
 redis
 django-debug-toolbar
+psycopg2-binary

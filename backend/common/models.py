@@ -154,7 +154,6 @@ def create_user_info(sender, instance, created, **kwargs):
     if created:
         UserInfo.objects.create(user=instance,display_name=instance.email)
         instance:User
-        # if instance.
 
 class UserInfo(models.Model):
     # to extend the predefined user model, use one2one field

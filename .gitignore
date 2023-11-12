@@ -10,6 +10,7 @@
 **/.idea/
 
 # data
+*data.json 
 *.dump
 
 # npm
