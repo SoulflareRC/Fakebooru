@@ -1,3 +1,4 @@
+import allauth.account.forms
 import django.db.models.fields.files
 import taggit.managers
 from django.db import models
@@ -139,6 +140,7 @@ class Rating(models.Model):
     by = models.ForeignKey(User,on_delete=models.CASCADE)
 
     class Meta:
+        unique_together = ('by','post')
         indexes = [
             models.Index(fields=['post', 'by']),
         ]
@@ -147,17 +149,26 @@ class CommentVote(models.Model):
     comment = models.ForeignKey(FluentComment,related_name="votes",on_delete=models.CASCADE)
     vote = models.IntegerField(choices=VOTES)
     by = models.ForeignKey(User,on_delete=models.CASCADE)
+    class Meta:
+        unique_together = ('by','comment')
 
-
+from allauth.account.adapter import DefaultAccountAdapter
+from allauth.account.models import EmailAddress
 @receiver(post_save, sender=User)
 def create_user_info(sender, instance, created, **kwargs):
     if created:
         UserInfo.objects.create(user=instance,display_name=instance.email)
         instance:User
+        if instance.is_superuser:
+            print("Setting up user email")
+            ea = EmailAddress.objects.add_email(None,instance,instance.email)
+            DefaultAccountAdapter().confirm_email(None,ea)
+            email = instance.emailaddress_set.first()
+            print(email.verified)
 
 class UserInfo(models.Model):
     # to extend the predefined user model, use one2one field
-    user = models.OneToOneField(User,on_delete=models.CASCADE,editable=False)
+    user = models.OneToOneField(User,on_delete=models.CASCADE,editable=False,unique=True)
     display_name = models.CharField(max_length=50,blank=False,null=False,default="None")
     slogan = models.CharField(max_length=200,blank=True)
     icon = models.ImageField(max_length=500, blank=True,
