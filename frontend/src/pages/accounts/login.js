@@ -19,6 +19,7 @@ export const Login = () => {
         console.log("Login response:",response); 
         const key = response.data.key; 
         api.defaults.headers.common['Authorization']=`Token ${key}`; 
+		console.log("Headers:",api.defaults.headers.common["Authorization"]); 
         Cookies.set('authToken',key);
         const userData = await fetchCurrentUserData(); 
         console.log("Current user data after login:", userData);

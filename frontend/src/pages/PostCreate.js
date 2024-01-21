@@ -114,7 +114,7 @@ export const PostCreate = () => {
 
         <Form.Label htmlFor="source">Source (optional)</Form.Label>
         <Form.Control id="source" name="source" placeholder="Link to the source" type="url" />
-        <Button disabled={loading} type="submit">
+        <Button type="submit">
           Submit
         </Button>
       </form>

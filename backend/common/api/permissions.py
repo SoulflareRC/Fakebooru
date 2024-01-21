@@ -112,4 +112,4 @@ class TagPermission(permissions.BasePermission):
         if action in ['list', 'retrieve']:
             # everyone can see the list of the tags!
             return True
-        return False
+        return user.is_authenticated
